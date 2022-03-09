@@ -8,15 +8,31 @@ from app import database
 from app import login
 
 
+followers = database.Table(
+    "followers",
+    database.Column("follower_id", database.Integer, database.ForeignKey("user.id")),
+    database.Column("followed_id", database.Integer, database.ForeignKey("user.id")),
+)
+
+
 class User(UserMixin, database.Model):
 
     id = database.Column(database.Integer, primary_key=True)
     username = database.Column(database.String(64), index=True, unique=True)
     email = database.Column(database.String(120), index=True, unique=True)
     password_hash = database.Column(database.String(128))
-    posts = database.relationship("Post", backref="author", lazy="dynamic")
     about_me = database.Column(database.String(140))
     last_seen = database.Column(database.DateTime, default=datetime.utcnow)
+
+    posts = database.relationship("Post", backref="author", lazy="dynamic")
+    followed = database.relationship(
+        "User",
+        secondary=followers,
+        primaryjoin=(followers.c.follower_id == id),
+        secondaryjoin=(followers.c.followed_id == id),
+        backref=database.backref("followers", lazy="dynamic"),
+        lazy="dynamic",
+    )
 
     def __repr__(self):
 
@@ -35,6 +51,29 @@ class User(UserMixin, database.Model):
         digest = md5(self.email.lower().encode("utf-8")).hexdigest()
 
         return f"https://www.gravatar.com/avatar/{digest}?d=identicon&s={size}"
+
+    def is_following(self, user):
+
+        return self.followed.filter(followers.c.followed_id == user.id).count() > 0
+
+    def follow(self, user):
+
+        if not self.is_following(user):
+            self.followed.append(user)
+
+    def unfollow(self, user):
+
+        if self.is_following(user):
+            self.followed.remove(user)
+
+    def followed_posts(self):
+
+        followed = Post.query.join(followers, (followers.c.followed_id == Post.user_id)).filter(
+            followers.c.follower_id == self.id
+        )
+        own = Post.query.filter_by(user_id=self.id)
+
+        return followed.union(own).order_by(Post.timestamp.desc())
 
 
 class Post(database.Model):
