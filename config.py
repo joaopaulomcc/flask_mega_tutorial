@@ -23,3 +23,4 @@ class Config(object):
     MAIL_API_KEY = os.environ.get("MAIL_API_KEY")
     ADMINS = os.environ.get("ADMINS")
     POSTS_PER_PAGE = 3
+    LANGUAGES = ["en", "es"]
